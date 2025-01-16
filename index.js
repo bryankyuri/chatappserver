@@ -16,6 +16,7 @@ const io = new Server(httpServer, {
     origin: [
       "http://localhost:5173",
       "https://chatapp-bryanq-projects.vercel.app",
+      "https://chatapp-alpha-eight.vercel.app/"
     ],
     methods: ["GET", "POST"],
   },
