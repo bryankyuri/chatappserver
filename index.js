@@ -42,6 +42,45 @@ class ChatSession {
         content: `You are a helpful AI assistant discussing the topic: ${topic}. Provide engaging and informative responses.`,
       },
     ];
+    this.firstMessageTime = null;
+    this.lastReviewPromptTime = null;
+    this.hasSubmittedReview = false;
+    this.reviewTimer = null;
+  }
+
+  startReviewTimer(socket) {
+    if (!this.firstMessageTime) {
+      this.firstMessageTime = new Date();
+      
+      // First CTA after 1 minute
+      this.reviewTimer = setTimeout(() => {
+        this.sendReviewPrompt(socket);
+      }, 60000); // 1 minute
+    }
+  }
+
+  sendReviewPrompt(socket) {
+    if (!this.hasSubmittedReview) {
+      this.lastReviewPromptTime = new Date();
+      socket.emit('review_prompt', {
+        topic: this.topic,
+        message: "How would you rate this conversation?",
+        timestamp: new Date().toISOString()
+      });
+
+      // Schedule next prompt in 10 minutes if no response
+      this.reviewTimer = setTimeout(() => {
+        this.sendReviewPrompt(socket);
+      }, 600000); // 10 minutes
+    }
+  }
+
+  submitReview(rating) {
+    this.hasSubmittedReview = true;
+    if (this.reviewTimer) {
+      clearTimeout(this.reviewTimer);
+    }
+    // Here you could save the review to a database
   }
 
   async sendMessage(message) {
@@ -103,12 +142,24 @@ io.on("connection", (socket) => {
     if (userTopics) {
       const session = userTopics.get(topic);
       if (session) {
+        session.startReviewTimer(socket);
         const aiResponse = await session.sendMessage(message);
         socket.emit("ai_response", {
           topic,
           message: aiResponse,
           timestamp: new Date().toISOString(),
         });
+      }
+    }
+  });
+
+  socket.on('submit_review', ({ userId, topic, rating }) => {
+    const userTopics = userSessions.get(userId);
+    if (userTopics) {
+      const session = userTopics.get(topic);
+      if (session) {
+        session.submitReview(rating);
+        socket.emit('review_submitted', { topic });
       }
     }
   });
